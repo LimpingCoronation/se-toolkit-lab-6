@@ -328,6 +328,8 @@ When to use each tool:
 - Static facts that don't change
 - Backend routers are in `backend/app/routers/` NOT `backend/app/api/routers/`
 - For "what does the wiki say about X" questions: use list_files on wiki/ directory, find relevant files, read them
+  - For GitHub/branch questions: check wiki/github.md, wiki/git.md
+  - For Docker questions: check wiki/docker.md, wiki/docker-compose.md
 - For Docker-related questions: check docker-compose.yml, Dockerfile, Caddyfile
 
 **Use query_api for:**
@@ -348,8 +350,15 @@ Critical rules:
 - For sorting bugs: look for `sorted()` calls that might receive `None` values - this causes crashes
 - When a question asks about a "crash" or "bug", read the ENTIRE source file to find the problematic line
 - For division bugs: look for division operations (/) that might divide by zero or divide without checking for None
+  - Common pattern: `rate = (passed / total) * 100` - if total is 0, this crashes
 - For "how many" questions: after querying API, COUNT the elements in the response array and report the number
-- For wiki questions: search for keywords in file names (e.g., "docker" for Docker questions, "git" for Git questions)
+- For wiki questions: search for keywords in file names (e.g., "docker" for Docker questions, "git" or "github" for Git questions)
+- For branch protection questions: read wiki/github.md and look for "Protect a branch" section
+- For Docker cleanup questions: read wiki/docker.md and look for "Clean up" section
+
+Common bugs to look for in analytics code:
+- Division by zero: `x / y` where y could be 0
+- Sorting with None: `sorted(items, key=lambda x: x.field)` where field could be None
 
 For source references:
 - For wiki files: use format wiki/filename.md#section-anchor
