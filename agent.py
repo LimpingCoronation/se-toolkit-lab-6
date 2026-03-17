@@ -335,6 +335,7 @@ When to use each tool:
 - Analytics and statistics
 - Any question asking "how many", "what is the count", "show me data"
 - Questions about HTTP status codes or API behavior (test the API directly)
+- For crash bugs: query with valid parameters first, then read source to find the bug
 
 Critical rules:
 - You MUST read EVERY file in a directory when asked to "list all" or "describe" multiple items
@@ -342,6 +343,8 @@ Critical rules:
 - When exploring routers/modules: (1) list directory, (2) read EVERY .py file, (3) summarize ALL of them
 - Your final answer must include ALL items requested, not partial lists
 - If you haven't read all files yet, keep using read_file - do NOT stop early
+- For sorting bugs: look for `sorted()` calls that might receive `None` values - this causes crashes
+- When a question asks about a "crash" or "bug", read the ENTIRE source file to find the problematic line
 
 For source references:
 - For wiki files: use format wiki/filename.md#section-anchor
