@@ -3,6 +3,7 @@
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -450,6 +451,39 @@ def call_llm(messages: list, api_key: str, api_base: str, model: str, tools: lis
         sys.exit(1)
 
 
+def extract_source(answer: str, tool_calls: list) -> str:
+    """Extract source reference from answer or tool calls."""
+    # Check if answer contains explicit source reference
+    if "wiki/" in answer:
+        # Look for wiki filename pattern
+        match = re.search(r'wiki/[\w-]+\.md', answer)
+        if match:
+            return match.group(0)
+    
+    # Extract from tool calls
+    for tc in reversed(tool_calls):
+        tool = tc.get("tool")
+        args = tc.get("args", {})
+        
+        if tool == "read_file":
+            path = args.get("path", "")
+            if path.startswith("wiki/"):
+                return path
+            elif "routers" in path or "app/" in path:
+                return path
+        elif tool == "query_api":
+            method = args.get("method", "GET")
+            path = args.get("path", "")
+            return f"API: {method} {path}"
+        elif tool == "list_files":
+            path = args.get("path", "")
+            if path.startswith("wiki/"):
+                return path
+    
+    # Default fallback
+    return "wiki/unknown.md"
+
+
 def run_agentic_loop(question: str, api_key: str, api_base: str, model: str) -> dict:
     """Run the agentic loop to answer a question.
 
@@ -591,8 +625,12 @@ def run_agentic_loop(question: str, api_key: str, api_base: str, model: str) -> 
             # This is a complete final answer (or we've exhausted force continues)
             print(f"Final answer received", file=sys.stderr)
 
+            # Extract source from answer or tool calls
+            source = extract_source(answer, all_tool_calls)
+
             return {
                 "answer": answer,
+                "source": source,
                 "tool_calls": all_tool_calls,
             }
 
@@ -602,8 +640,12 @@ def run_agentic_loop(question: str, api_key: str, api_base: str, model: str) -> 
     # Try to extract an answer from the last response
     answer = response.get("content") or "Maximum tool calls reached without a final answer."
 
+    # Extract source
+    source = extract_source(answer, all_tool_calls)
+
     return {
         "answer": answer,
+        "source": source,
         "tool_calls": all_tool_calls,
     }
 
