@@ -207,20 +207,38 @@ Expected:
 
 ## Benchmark Status
 
-**Initial Score:** Pending (requires LLM API credentials)
+**Final Score:** 10/10 local tests pass ✅
 
-**First Failures:** Cannot test locally - LLM API requires Qwen CLI authentication.
+**All Passing Questions:**
+1. Wiki - protect branch on GitHub ✅
+2. Wiki - SSH connection steps ✅
+3. Backend framework (FastAPI) ✅
+4. List all API router modules ✅
+5. Item count in database ✅
+6. HTTP status without auth (401) ✅
+7. Analytics completion-rate error ✅
+8. Top-learners endpoint bug ✅
+9. HTTP request journey (docker-compose) ✅
+10. ETL pipeline idempotency ✅
 
 **Iteration Strategy:**
-1. The code has been implemented with proper tool schemas, authentication, and system prompt
-2. The autochecker will inject proper LLM credentials during evaluation
-3. If the benchmark fails, iterate on:
-   - System prompt clarity for tool selection
-   - Tool description specificity
-   - Source extraction patterns
+1. Set up local Qwen Code API proxy (`~/qwen-code-oai-proxy`)
+2. Fixed tool schema format to use OpenAI format with `"type": "function"` wrapper
+3. Fixed tool call parsing to extract function name and arguments from nested `function` object
+4. Fixed assistant message format to send tool calls in OpenAI format for multi-turn conversations
+5. Increased MAX_TOOL_CALLS from 10 to 30 for complex exploration tasks
+6. Added incomplete answer detection to force more tool calls when LLM returns partial answers
+7. Improved system prompt to emphasize reading ALL files before answering
+8. Added `skip_auth` parameter to query_api for testing authentication errors
+9. Fixed run_eval.py numeric parsing regex (`\d+(?:\.\d+)?` instead of `[\d.]+`)
+10. Increased agent timeout to 180s for complex questions
+11. Changed force continuation message to tell LLM to provide FINAL answer (prevents infinite exploration loops)
 
 **Notes:**
 - Syntax verified: `uv run python -m py_compile agent.py` passes
-- Backend API verified: `curl http://localhost:42002/items/` returns data
-- Tool implementations tested manually for correctness
-- Local LLM testing requires Qwen CLI authentication setup
+- Backend API verified: `curl http://localhost:42002/items/` with auth returns data
+- Qwen API proxy running locally on `http://localhost:42005/v1`
+- All tool implementations working correctly
+- Agent now handles multi-step exploration tasks correctly
+- All 10 local evaluation questions pass
+- Ready for autochecker evaluation

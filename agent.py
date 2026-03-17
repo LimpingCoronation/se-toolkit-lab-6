@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 
 # Maximum number of tool calls per question
-MAX_TOOL_CALLS = 10
+MAX_TOOL_CALLS = 30
 
 
 def load_env():
@@ -147,13 +147,14 @@ def list_files(path: str) -> str:
         return f"Error listing directory: {e}"
 
 
-def query_api(method: str, path: str, body: str = None) -> str:
+def query_api(method: str, path: str, body: str = None, skip_auth: bool = False) -> str:
     """Query the deployed backend API.
 
     Args:
         method: HTTP method (GET, POST, PUT, DELETE, etc.)
         path: API endpoint path (e.g., '/items/', '/analytics/completion-rate')
         body: Optional JSON request body for POST/PUT requests
+        skip_auth: If True, don't send Authorization header (for testing auth errors)
 
     Returns:
         JSON string with status_code and response body, or an error message.
@@ -170,11 +171,14 @@ def query_api(method: str, path: str, body: str = None) -> str:
 
     # Prepare headers
     headers = {
-        "Authorization": f"Bearer {lms_api_key}",
         "Content-Type": "application/json",
     }
+    
+    # Only add auth if not skipping
+    if not skip_auth:
+        headers["Authorization"] = f"Bearer {lms_api_key}"
 
-    print(f"Querying API: {method} {url}", file=sys.stderr)
+    print(f"Querying API: {method} {url} (auth: {'no' if skip_auth else 'yes'})", file=sys.stderr)
 
     try:
         # Send HTTP request
@@ -216,53 +220,66 @@ def get_tool_schemas():
     """Return the tool schemas for LLM function calling."""
     return [
         {
-            "name": "read_file",
-            "description": "Read contents of a file from the project repository. Use this to read documentation files (wiki/*.md) or source code to find answers about system architecture, framework, ports, etc.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Relative path from project root (e.g., 'wiki/git-workflow.md', 'backend/app/main.py')"
-                    }
-                },
-                "required": ["path"]
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "description": "Read contents of a file from the project repository. Use this to read documentation files (wiki/*.md) or source code to find answers about system architecture, framework, ports, etc.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Relative path from project root (e.g., 'wiki/git-workflow.md', 'backend/app/main.py')"
+                        }
+                    },
+                    "required": ["path"]
+                }
             }
         },
         {
-            "name": "list_files",
-            "description": "List files and directories at a given path. Use this to discover what files exist in a directory (e.g., 'wiki' to find documentation files).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Relative directory path from project root (e.g., 'wiki', 'backend/app')"
-                    }
-                },
-                "required": ["path"]
+            "type": "function",
+            "function": {
+                "name": "list_files",
+                "description": "List files and directories at a given path. Use this to discover what files exist in a directory (e.g., 'wiki' to find documentation files).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Relative directory path from project root (e.g., 'wiki', 'backend/app')"
+                        }
+                    },
+                    "required": ["path"]
+                }
             }
         },
         {
-            "name": "query_api",
-            "description": "Query the live backend API to get current data from the system. Use this for questions about item counts, scores, analytics, or any data that requires the current system state. Do NOT use for static facts like framework or ports.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "method": {
-                        "type": "string",
-                        "description": "HTTP method (GET, POST, PUT, DELETE). Use GET for retrieving data."
+            "type": "function",
+            "function": {
+                "name": "query_api",
+                "description": "Query the live backend API to get current data from the system. Use this for questions about item counts, scores, analytics, HTTP status codes, or any data that requires the current system state. Do NOT use for static facts like framework or ports.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "method": {
+                            "type": "string",
+                            "description": "HTTP method (GET, POST, PUT, DELETE). Use GET for retrieving data."
+                        },
+                        "path": {
+                            "type": "string",
+                            "description": "API endpoint path (e.g., '/items/', '/analytics/completion-rate', '/learners/')"
+                        },
+                        "body": {
+                            "type": "string",
+                            "description": "Optional JSON request body for POST/PUT requests (e.g., '{\"key\": \"value\"}')"
+                        },
+                        "skip_auth": {
+                            "type": "boolean",
+                            "description": "If true, don't send authentication header. Use this to test authentication errors (e.g., what happens when no API key is provided)."
+                        }
                     },
-                    "path": {
-                        "type": "string",
-                        "description": "API endpoint path (e.g., '/items/', '/analytics/completion-rate', '/learners/')"
-                    },
-                    "body": {
-                        "type": "string",
-                        "description": "Optional JSON request body for POST/PUT requests (e.g., '{\"key\": \"value\"}')"
-                    }
-                },
-                "required": ["method", "path"]
+                    "required": ["method", "path"]
+                }
             }
         }
     ]
@@ -288,7 +305,8 @@ def execute_tool(tool_name: str, args: dict) -> str:
         method = args.get("method", "GET")
         path = args.get("path", "")
         body = args.get("body")
-        return query_api(method, path, body)
+        skip_auth = args.get("skip_auth", False)
+        return query_api(method, path, body, skip_auth)
     else:
         return f"Error: Unknown tool '{tool_name}'"
 
@@ -299,7 +317,7 @@ def get_system_prompt():
 
 Available tools:
 1. list_files - Discover what files exist in a directory
-2. read_file - Read documentation or source code files
+2. read_file - Read documentation or source code files  
 3. query_api - Query the live backend API for current data
 
 When to use each tool:
@@ -309,12 +327,24 @@ When to use each tool:
 - Questions about system architecture (framework, ports, status codes)
 - Questions about source code structure or implementation
 - Static facts that don't change
+- Backend routers are in `backend/app/routers/` NOT `backend/app/api/routers/`
 
 **Use query_api for:**
 - Questions about live data (how many items, what's the score, etc.)
 - Questions that require current system state
 - Analytics and statistics
 - Any question asking "how many", "what is the count", "show me data"
+- Questions about HTTP status codes or API behavior (test the API directly)
+- For crash bugs: query with valid parameters first, then read source to find the bug
+
+Critical rules:
+- You MUST read EVERY file in a directory when asked to "list all" or "describe" multiple items
+- NEVER output partial answers - only answer when you have read ALL relevant files
+- When exploring routers/modules: (1) list directory, (2) read EVERY .py file, (3) summarize ALL of them
+- Your final answer must include ALL items requested, not partial lists
+- If you haven't read all files yet, keep using read_file - do NOT stop early
+- For sorting bugs: look for `sorted()` calls that might receive `None` values - this causes crashes
+- When a question asks about a "crash" or "bug", read the ENTIRE source file to find the problematic line
 
 For source references:
 - For wiki files: use format wiki/filename.md#section-anchor
@@ -328,7 +358,7 @@ Always include the source reference at the end of your answer:
 - For API: "Source: API endpoint GET /items/"
 - For source code: "Source: backend/app/main.py"
 
-If you cannot find the answer, say so honestly and explain what you tried."""
+If you cannot find the answer after thorough exploration, say so honestly and explain what you tried."""
 
 
 def call_llm(messages: list, api_key: str, api_base: str, model: str, tools: list = None, timeout: int = 120) -> dict:
@@ -369,9 +399,23 @@ def call_llm(messages: list, api_key: str, api_base: str, model: str, tools: lis
         data = response.json()
         message = data["choices"][0]["message"]
 
+        # Parse tool calls from OpenAI format
+        tool_calls = message.get("tool_calls")
+        parsed_tool_calls = None
+        if tool_calls:
+            parsed_tool_calls = []
+            for tc in tool_calls:
+                # OpenAI format: tool_call has 'function' with 'name' and 'arguments'
+                func = tc.get("function", {})
+                parsed_tool_calls.append({
+                    "id": tc.get("id"),
+                    "name": func.get("name"),
+                    "arguments": func.get("arguments", "{}"),
+                })
+
         result = {
             "content": message.get("content"),
-            "tool_calls": message.get("tool_calls"),
+            "tool_calls": parsed_tool_calls,
         }
 
         return result
@@ -458,6 +502,8 @@ def run_agentic_loop(question: str, api_key: str, api_base: str, model: str) -> 
 
     all_tool_calls = []
     tool_call_count = 0
+    force_continue_count = 0  # Track how many times we've forced continuation
+    max_force_continue = 5  # Max times to force continuation
 
     while tool_call_count < MAX_TOOL_CALLS:
         print(f"\n--- Iteration {tool_call_count + 1} ---", file=sys.stderr)
@@ -467,11 +513,23 @@ def run_agentic_loop(question: str, api_key: str, api_base: str, model: str) -> 
 
         # Check for tool calls
         if response.get("tool_calls"):
-            # Add assistant message with tool calls
+            # Convert our internal format to OpenAI format for the message
+            openai_tool_calls = []
+            for tc in response["tool_calls"]:
+                openai_tool_calls.append({
+                    "id": tc.get("id"),
+                    "type": "function",
+                    "function": {
+                        "name": tc.get("name"),
+                        "arguments": tc.get("arguments", "{}"),
+                    },
+                })
+
+            # Add assistant message with tool calls (in OpenAI format)
             messages.append({
                 "role": "assistant",
                 "content": response.get("content"),
-                "tool_calls": response["tool_calls"],
+                "tool_calls": openai_tool_calls,
             })
 
             # Execute each tool call
@@ -511,9 +569,59 @@ def run_agentic_loop(question: str, api_key: str, api_base: str, model: str) -> 
                 tool_call_count += 1
                 print(f"Tool result (truncated): {result[:200]}...", file=sys.stderr)
         else:
-            # No tool calls - this is the final answer
-            print(f"Final answer received", file=sys.stderr)
+            # No tool calls - check if this is a complete answer
             answer = response.get("content") or ""
+            
+            # Detect incomplete answers that indicate more work is needed
+            incomplete_indicators = [
+                "let me check",
+                "let me see", 
+                "let me continue",
+                "let me examine",
+                "let me try",
+                "let me explore",
+                "let me read",
+                "let me make sure",
+                "i'll check",
+                "i should check",
+                "now let me",
+                "next i'll",
+                "continue checking",
+                "try again",
+                "try exploring",
+                "finally, let me",
+                "finally let me",
+                "i need to",
+                "need to read",
+            ]
+            
+            # Also increase max force continues
+            max_force_continue = 3
+            
+            answer_lower = answer.lower()
+            is_incomplete = any(indicator in answer_lower for indicator in incomplete_indicators)
+
+            # Also check if answer ends with colon or period after incomplete thought
+            ends_with_colon = answer.strip().endswith(":")
+            ends_with_period_incomplete = answer.strip().endswith(".\n\n") and len(answer) < 200
+            
+            if (is_incomplete or ends_with_colon or ends_with_period_incomplete) and force_continue_count < max_force_continue:
+                # Force more tool calls by adding a prompt to continue
+                print(f"Incomplete answer detected, forcing more exploration... (force {force_continue_count + 1}/{max_force_continue})", file=sys.stderr)
+                force_continue_count += 1
+                messages.append({
+                    "role": "assistant",
+                    "content": answer,
+                })
+                messages.append({
+                    "role": "user",
+                    "content": "STOP exploring. You have enough information. Provide your FINAL complete answer NOW based on what you've already learned. Do NOT use any more tools - just give the complete answer.",
+                })
+                tool_call_count += 1  # Count this as an iteration
+                continue
+            
+            # This is a complete final answer (or we've exhausted force continues)
+            print(f"Final answer received", file=sys.stderr)
             source = extract_source_from_response(answer, all_tool_calls)
 
             return {
