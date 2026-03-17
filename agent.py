@@ -216,53 +216,62 @@ def get_tool_schemas():
     """Return the tool schemas for LLM function calling."""
     return [
         {
-            "name": "read_file",
-            "description": "Read contents of a file from the project repository. Use this to read documentation files (wiki/*.md) or source code to find answers about system architecture, framework, ports, etc.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Relative path from project root (e.g., 'wiki/git-workflow.md', 'backend/app/main.py')"
-                    }
-                },
-                "required": ["path"]
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "description": "Read contents of a file from the project repository. Use this to read documentation files (wiki/*.md) or source code to find answers about system architecture, framework, ports, etc.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Relative path from project root (e.g., 'wiki/git-workflow.md', 'backend/app/main.py')"
+                        }
+                    },
+                    "required": ["path"]
+                }
             }
         },
         {
-            "name": "list_files",
-            "description": "List files and directories at a given path. Use this to discover what files exist in a directory (e.g., 'wiki' to find documentation files).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Relative directory path from project root (e.g., 'wiki', 'backend/app')"
-                    }
-                },
-                "required": ["path"]
+            "type": "function",
+            "function": {
+                "name": "list_files",
+                "description": "List files and directories at a given path. Use this to discover what files exist in a directory (e.g., 'wiki' to find documentation files).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Relative directory path from project root (e.g., 'wiki', 'backend/app')"
+                        }
+                    },
+                    "required": ["path"]
+                }
             }
         },
         {
-            "name": "query_api",
-            "description": "Query the live backend API to get current data from the system. Use this for questions about item counts, scores, analytics, or any data that requires the current system state. Do NOT use for static facts like framework or ports.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "method": {
-                        "type": "string",
-                        "description": "HTTP method (GET, POST, PUT, DELETE). Use GET for retrieving data."
+            "type": "function",
+            "function": {
+                "name": "query_api",
+                "description": "Query the live backend API to get current data from the system. Use this for questions about item counts, scores, analytics, or any data that requires the current system state. Do NOT use for static facts like framework or ports.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "method": {
+                            "type": "string",
+                            "description": "HTTP method (GET, POST, PUT, DELETE). Use GET for retrieving data."
+                        },
+                        "path": {
+                            "type": "string",
+                            "description": "API endpoint path (e.g., '/items/', '/analytics/completion-rate', '/learners/')"
+                        },
+                        "body": {
+                            "type": "string",
+                            "description": "Optional JSON request body for POST/PUT requests (e.g., '{\"key\": \"value\"}')"
+                        }
                     },
-                    "path": {
-                        "type": "string",
-                        "description": "API endpoint path (e.g., '/items/', '/analytics/completion-rate', '/learners/')"
-                    },
-                    "body": {
-                        "type": "string",
-                        "description": "Optional JSON request body for POST/PUT requests (e.g., '{\"key\": \"value\"}')"
-                    }
-                },
-                "required": ["method", "path"]
+                    "required": ["method", "path"]
+                }
             }
         }
     ]
@@ -369,9 +378,23 @@ def call_llm(messages: list, api_key: str, api_base: str, model: str, tools: lis
         data = response.json()
         message = data["choices"][0]["message"]
 
+        # Parse tool calls from OpenAI format
+        tool_calls = message.get("tool_calls")
+        parsed_tool_calls = None
+        if tool_calls:
+            parsed_tool_calls = []
+            for tc in tool_calls:
+                # OpenAI format: tool_call has 'function' with 'name' and 'arguments'
+                func = tc.get("function", {})
+                parsed_tool_calls.append({
+                    "id": tc.get("id"),
+                    "name": func.get("name"),
+                    "arguments": func.get("arguments", "{}"),
+                })
+
         result = {
             "content": message.get("content"),
-            "tool_calls": message.get("tool_calls"),
+            "tool_calls": parsed_tool_calls,
         }
 
         return result
@@ -467,11 +490,23 @@ def run_agentic_loop(question: str, api_key: str, api_base: str, model: str) -> 
 
         # Check for tool calls
         if response.get("tool_calls"):
-            # Add assistant message with tool calls
+            # Convert our internal format to OpenAI format for the message
+            openai_tool_calls = []
+            for tc in response["tool_calls"]:
+                openai_tool_calls.append({
+                    "id": tc.get("id"),
+                    "type": "function",
+                    "function": {
+                        "name": tc.get("name"),
+                        "arguments": tc.get("arguments", "{}"),
+                    },
+                })
+
+            # Add assistant message with tool calls (in OpenAI format)
             messages.append({
                 "role": "assistant",
                 "content": response.get("content"),
-                "tool_calls": response["tool_calls"],
+                "tool_calls": openai_tool_calls,
             })
 
             # Execute each tool call

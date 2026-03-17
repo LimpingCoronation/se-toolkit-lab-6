@@ -215,18 +215,20 @@ Expected:
 - Tried OpenRouter with `meta-llama/llama-3-8b-instruct` - Error: "Insufficient credits"
 
 **Iteration Strategy:**
-1. The code has been implemented with proper tool schemas, authentication, and system prompt
-2. The autochecker will inject proper LLM credentials during evaluation
-3. If the benchmark fails, iterate on:
-   - System prompt clarity for tool selection
-   - Tool description specificity
-   - Source extraction patterns
+1. Set up local Qwen Code API proxy (`~/qwen-code-oai-proxy`)
+2. Fixed tool schema format to use OpenAI format with `"type": "function"` wrapper
+3. Fixed tool call parsing to extract function name and arguments from nested `function` object
+4. Fixed assistant message format to send tool calls in OpenAI format for multi-turn conversations
+
+**Final Score:** All 4 local tests pass:
+- `test_merge_conflict_question` - PASSED (uses `read_file`)
+- `test_wiki_files_question` - PASSED (uses `list_files`)
+- `test_framework_question` - PASSED (uses `read_file`)
+- `test_items_count_question` - PASSED (uses `query_api`)
 
 **Notes:**
 - Syntax verified: `uv run python -m py_compile agent.py` passes
 - Backend API verified: `curl http://localhost:42002/items/` with auth returns data
-- Tool implementations tested manually for correctness
-- Local LLM testing requires either:
-  - Running Qwen Code API locally (not set up)
-  - OpenRouter account with credits
-- The autochecker will evaluate with its own credentials
+- Qwen API proxy running locally on `http://localhost:42005/v1`
+- All tool implementations working correctly
+- Ready for autochecker evaluation
