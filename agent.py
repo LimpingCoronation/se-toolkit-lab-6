@@ -505,7 +505,7 @@ def run_agentic_loop(question: str, api_key: str, api_base: str, model: str) -> 
     all_tool_calls = []
     tool_call_count = 0
     force_continue_count = 0  # Track how many times we've forced continuation
-    max_force_continue = 5  # Max times to force continuation
+    max_force_continue = 2  # Max times to force continuation
 
     while tool_call_count < MAX_TOOL_CALLS:
         print(f"\n--- Iteration {tool_call_count + 1} ---", file=sys.stderr)
@@ -597,8 +597,8 @@ def run_agentic_loop(question: str, api_key: str, api_base: str, model: str) -> 
                 "need to read",
             ]
             
-            # Also increase max force continues
-            max_force_continue = 3
+            # Also limit force continues
+            max_force_continue = 2
             
             answer_lower = answer.lower()
             is_incomplete = any(indicator in answer_lower for indicator in incomplete_indicators)
