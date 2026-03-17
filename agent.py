@@ -603,16 +603,25 @@ def main():
     question = sys.argv[1]
 
     # Load configuration
-    load_env()
-    api_key, api_base, model = get_llm_config()
+    try:
+        load_env()
+        api_key, api_base, model = get_llm_config()
+    except SystemExit:
+        # Output valid JSON even on config error
+        print(json.dumps({"answer": "Error: Configuration not found", "tool_calls": []}))
+        sys.exit(1)
 
     print(f"Question: {question}", file=sys.stderr)
 
     # Run agentic loop
-    result = run_agentic_loop(question, api_key, api_base, model)
+    try:
+        result = run_agentic_loop(question, api_key, api_base, model)
+    except Exception as e:
+        print(f"Error during execution: {e}", file=sys.stderr)
+        result = {"answer": f"Error: {e}", "tool_calls": []}
 
-    # Output JSON result
-    print(json.dumps(result, indent=2))
+    # Output JSON result (compact format for autochecker)
+    print(json.dumps(result))
 
 
 if __name__ == "__main__":
