@@ -3,7 +3,6 @@
 
 import json
 import os
-import re
 import sys
 from pathlib import Path
 
@@ -436,52 +435,6 @@ def call_llm(messages: list, api_key: str, api_base: str, model: str, tools: lis
         sys.exit(1)
 
 
-def extract_source_from_response(response_text: str, tool_calls: list) -> str:
-    """Extract the source reference from the LLM response.
-
-    Args:
-        response_text: The text response from the LLM
-        tool_calls: List of tool calls made during the conversation
-
-    Returns:
-        Source reference string (e.g., 'wiki/git-workflow.md#section' or 'API: GET /items/')
-    """
-    # Try to find explicit source reference in the response
-    # Pattern: Source: wiki/filename.md#anchor or wiki/filename.md#anchor
-    patterns = [
-        r"Source:\s*(wiki/[\w-]+\.md#[\w-]+)",
-        r"(wiki/[\w-]+\.md#[\w-]+)",
-        r"Source:\s*(wiki/[\w-]+\.md)",
-        r"(wiki/[\w-]+\.md)",
-    ]
-
-    for pattern in patterns:
-        match = re.search(pattern, response_text, re.IGNORECASE)
-        if match:
-            return match.group(1)
-
-    # Check for API source reference
-    api_pattern = r"Source:\s*API\s*(?:endpoint)?\s*(GET|POST|PUT|DELETE)\s*([\w/-]+)"
-    api_match = re.search(api_pattern, response_text, re.IGNORECASE)
-    if api_match:
-        method = api_match.group(1).upper()
-        path = api_match.group(2)
-        return f"API: {method} {path}"
-
-    # Fallback: use the last file read via read_file
-    for tc in reversed(tool_calls):
-        if tc.get("tool") == "read_file":
-            path = tc.get("args", {}).get("path", "")
-            if path.startswith("wiki/"):
-                return path
-        elif tc.get("tool") == "query_api":
-            method = tc.get("args", {}).get("method", "GET")
-            path = tc.get("args", {}).get("path", "")
-            return f"API: {method} {path}"
-
-    return "wiki/unknown.md"
-
-
 def run_agentic_loop(question: str, api_key: str, api_base: str, model: str) -> dict:
     """Run the agentic loop to answer a question.
 
@@ -622,11 +575,9 @@ def run_agentic_loop(question: str, api_key: str, api_base: str, model: str) -> 
             
             # This is a complete final answer (or we've exhausted force continues)
             print(f"Final answer received", file=sys.stderr)
-            source = extract_source_from_response(answer, all_tool_calls)
 
             return {
                 "answer": answer,
-                "source": source,
                 "tool_calls": all_tool_calls,
             }
 
@@ -635,11 +586,9 @@ def run_agentic_loop(question: str, api_key: str, api_base: str, model: str) -> 
 
     # Try to extract an answer from the last response
     answer = response.get("content") or "Maximum tool calls reached without a final answer."
-    source = extract_source_from_response(answer, all_tool_calls)
 
     return {
         "answer": answer,
-        "source": source,
         "tool_calls": all_tool_calls,
     }
 
