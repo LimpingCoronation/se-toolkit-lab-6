@@ -327,6 +327,8 @@ When to use each tool:
 - Questions about source code structure or implementation
 - Static facts that don't change
 - Backend routers are in `backend/app/routers/` NOT `backend/app/api/routers/`
+- For "what does the wiki say about X" questions: use list_files on wiki/ directory, find relevant files, read them
+- For Docker-related questions: check docker-compose.yml, Dockerfile, Caddyfile
 
 **Use query_api for:**
 - Questions about live data (how many items, what's the score, etc.)
@@ -335,6 +337,7 @@ When to use each tool:
 - Any question asking "how many", "what is the count", "show me data"
 - Questions about HTTP status codes or API behavior (test the API directly)
 - For crash bugs: query with valid parameters first, then read source to find the bug
+- For counting questions (learners, items): query the endpoint, then COUNT the items in the response array
 
 Critical rules:
 - You MUST read EVERY file in a directory when asked to "list all" or "describe" multiple items
@@ -344,6 +347,9 @@ Critical rules:
 - If you haven't read all files yet, keep using read_file - do NOT stop early
 - For sorting bugs: look for `sorted()` calls that might receive `None` values - this causes crashes
 - When a question asks about a "crash" or "bug", read the ENTIRE source file to find the problematic line
+- For division bugs: look for division operations (/) that might divide by zero or divide without checking for None
+- For "how many" questions: after querying API, COUNT the elements in the response array and report the number
+- For wiki questions: search for keywords in file names (e.g., "docker" for Docker questions, "git" for Git questions)
 
 For source references:
 - For wiki files: use format wiki/filename.md#section-anchor
