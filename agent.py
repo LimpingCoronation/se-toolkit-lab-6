@@ -327,6 +327,7 @@ When to use each tool:
 - Questions about system architecture (framework, ports, status codes)
 - Questions about source code structure or implementation
 - Static facts that don't change
+- Backend routers are in `backend/app/routers/` NOT `backend/app/api/routers/`
 
 **Use query_api for:**
 - Questions about live data (how many items, what's the score, etc.)
